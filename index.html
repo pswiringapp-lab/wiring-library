@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c2124">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wiring">
+<title>Wiring Library</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<script src="config.js"></script>
+<style>
+  :root {
+    --plate: #eef0ee;    /* galvanized subpanel */
+    --panel: #ffffff;
+    --ink: #1c2124;
+    --muted: #5d676b;
+    --rule: #d3d8d9;
+    --sleeve: #f5d33f;   /* wire-marker yellow */
+    --sleeve-ink: #1c2124;
+    --bar: #1c2124;
+    --bar-ink: #ffffff;
+    --fault: #b3261e;
+    --ground: #2f7d32;
+    --focus: #1f5fbf;
+    color-scheme: light;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --plate: #22292c; --panel: #2c3437; --ink: #eef1f1; --muted: #a6b0b3; --rule: #3c4649;
+      --bar: #161b1d; --fault: #ff8a80; --ground: #81c784; --focus: #8ab4f8; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --plate: #22292c; --panel: #2c3437; --ink: #eef1f1; --muted: #a6b0b3; --rule: #3c4649;
+    --bar: #161b1d; --fault: #ff8a80; --ground: #81c784; --focus: #8ab4f8; color-scheme: dark;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); background: var(--bar); }
+  *, *::before, *::after { box-sizing: inherit; }
+  body { margin: 0; min-height: 100vh; background: var(--plate); color: var(--ink);
+         font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+         -webkit-tap-highlight-color: transparent; }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  a { color: inherit; }
+
+  .bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bar); color: var(--bar-ink);
+         padding: 10px 14px 12px; }
+  .bar .row { display: flex; align-items: center; gap: 10px; max-width: 760px; margin: 0 auto; }
+  .bar h1 { margin: 0; font-size: 18px; font-weight: 700; flex: 1; letter-spacing: .2px; }
+  .bar .back { background: none; border: 0; color: var(--bar-ink); padding: 6px 8px 6px 0; font-size: 17px; cursor: pointer; }
+  .search { max-width: 760px; margin: 10px auto 0; position: relative; }
+  .search input { width: 100%; padding: 13px 14px; border-radius: 8px; border: 0; background: #fff; color: #1c2124;
+                  font-size: 17px; -webkit-appearance: none; }
+  .search input:placeholder-shown + button { display: none; }
+  .search input::-webkit-search-cancel-button { display: none; }
+  .search button { position: absolute; right: 6px; top: 6px; bottom: 6px; border: 0; background: none; color: #5d676b; padding: 0 10px; cursor: pointer; }
+
+  main { max-width: 760px; margin: 0 auto; padding: 14px 14px 40px; }
+  .notice { background: var(--panel); border-left: 5px solid var(--sleeve); padding: 10px 12px; border-radius: 4px; margin-bottom: 12px; font-size: 15px; }
+  .notice.fault { border-left-color: var(--fault); }
+  .crumbs { font-size: 15px; color: var(--muted); margin: 2px 0 10px; }
+  .crumbs a { color: var(--muted); }
+  h2 { font-size: 26px; line-height: 1.15; margin: 4px 0 12px; }
+
+  .list { background: var(--panel); border-radius: 8px; overflow: hidden; }
+  .list a.row { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 10px 14px;
+                text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .list a.row:last-child { border-bottom: 0; }
+  .list a.row:active { background: var(--rule); }
+  .row .main { flex: 1; min-width: 0; }
+  .row .t1 { font-weight: 650; font-size: 18px; }
+  .row .t2 { color: var(--muted); font-size: 14px; margin-top: 1px; }
+  .row .n { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .row .chev { color: var(--muted); font-size: 22px; line-height: 1; }
+
+  /* Model numbers wear a wire-marker sleeve, like the label on the conductor you're about to land. */
+  .sleeve { display: inline-block; background: var(--sleeve); color: var(--sleeve-ink); font-weight: 800;
+            padding: 2px 10px; border-radius: 5px; letter-spacing: .3px; font-variant-numeric: tabular-nums;
+            box-shadow: inset 0 -2px 0 rgba(0,0,0,.12); }
+  .sleeve.big { font-size: 28px; padding: 4px 14px; border-radius: 7px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 650; border: 1px dashed var(--muted); color: var(--muted);
+         border-radius: 4px; padding: 0 6px; margin-left: 6px; vertical-align: 2px; }
+
+  .doc-head { margin-bottom: 12px; }
+  .doc-head .variant { font-size: 18px; font-weight: 650; margin-top: 8px; }
+  .doc-head .type { color: var(--muted); margin-top: 4px; }
+  .note { background: var(--panel); border-left: 5px solid var(--ground); padding: 10px 12px; border-radius: 4px; margin: 10px 0; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 16px; border-radius: 8px;
+         border: 2px solid var(--ink); background: var(--panel); color: var(--ink); font-weight: 650; text-decoration: none; cursor: pointer; }
+  .btn.primary { background: var(--ink); color: var(--plate); }
+  .btn.fault { border-color: var(--fault); color: var(--fault); }
+  .btn.block { width: 100%; }
+  .pages { display: flex; flex-direction: column; gap: 10px; }
+  .page { background: #fff; border-radius: 4px; overflow: hidden; min-height: 200px; display: flex; align-items: center; justify-content: center; color: #5d676b; }
+  .page img { width: 100%; height: auto; display: block; }
+  .page-num { font-size: 13px; color: var(--muted); margin: 2px 0 -4px; }
+  .foot { color: var(--muted); font-size: 14px; margin-top: 18px; }
+  .help { text-align: center; margin-top: 22px; }
+  .help button { background: none; border: 0; text-decoration: underline; color: var(--muted); font-size: 16px; padding: 10px; cursor: pointer; }
+  .empty { background: var(--panel); border-radius: 8px; padding: 20px; }
+  .empty b { display: block; font-size: 18px; margin-bottom: 4px; }
+
+  .pin { max-width: 340px; margin: 12vh auto 0; text-align: center; }
+  .pin input { width: 100%; text-align: center; font-size: 28px; letter-spacing: 8px; padding: 12px; border-radius: 8px;
+               border: 2px solid var(--rule); background: var(--panel); margin: 14px 0; }
+
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 10; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { background: var(--plate); width: 100%; max-width: 760px; border-radius: 14px 14px 0 0; padding: 18px 16px;
+           padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); max-height: 90vh; overflow: auto; }
+  .sheet h3 { margin: 0 0 4px; font-size: 20px; }
+  .sheet p { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .chip { border: 2px solid var(--rule); background: var(--panel); border-radius: 20px; padding: 8px 14px; cursor: pointer; }
+  .chip[aria-pressed="true"] { border-color: var(--ink); background: var(--sleeve); color: var(--sleeve-ink); }
+  .sheet textarea { width: 100%; min-height: 90px; padding: 10px; border-radius: 8px; border: 2px solid var(--rule); background: var(--panel); }
+  .sheet .actions { justify-content: flex-end; }
+  @media (prefers-reduced-motion: no-preference) { .sheet { animation: up .18s ease-out; } @keyframes up { from { transform: translateY(30px); opacity: .6; } } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+const CFG = window.WL_CONFIG || {};
+const app = document.getElementById('app');
+const LS = { pin: 'wl-pin', cat: 'wl-catalog' };
+const DOC_CACHE = 'wl-docs';
+
+let catalog = null;      // { version, entries, aliases }
+let groups = [];         // one per device (diagram preferred, manual attached)
+let offline = false;
+let query = '';
+let needPin = false;
+let loadError = '';
+
+/* ---------------- data ---------------- */
+const nameKey = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/s$/, '');
+const modelKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const devKey = e => [nameKey(e.mfr), nameKey(e.type), modelKey(e.model), nameKey(e.variant)].join('|');
+
+function buildGroups(entries) {
+  const map = new Map();
+  entries.filter(e => e.kind === 'Diagram').forEach(e => map.set(devKey(e), { ...e, diagram: e, manual: null }));
+  entries.filter(e => e.kind === 'Manual').forEach(m => {
+    const exact = map.get(devKey(m));
+    if (exact) { exact.manual = exact.manual || m; return; }
+    const sameModel = [...map.values()].filter(g => g.diagram && !g.manual &&
+      nameKey(g.mfr) === nameKey(m.mfr) && nameKey(g.type) === nameKey(m.type) && modelKey(g.model) === modelKey(m.model));
+    if (sameModel.length) { sameModel.forEach(g => g.manual = m); return; }
+    map.set(devKey(m), { ...m, diagram: null, manual: m });
+  });
+  return [...map.values()].sort((a, b) =>
+    a.mfr.localeCompare(b.mfr) || a.type.localeCompare(b.type) || a.model.localeCompare(b.model, undefined, { numeric: true }) || a.variant.localeCompare(b.variant));
+}
+
+async function api(params) {
+  if (!CFG.API_URL || CFG.API_URL.includes('PASTE')) throw new Error('The app is not connected to the library yet. Put the web app URL in config.js.');
+  const u = new URL(CFG.API_URL);
+  Object.entries({ ...params, pin: localStorage.getItem(LS.pin) || '' }).forEach(([k, v]) => u.searchParams.set(k, v));
+  const r = await fetch(u.toString(), { redirect: 'follow' });
+  const j = await r.json();
+  if (!j.ok && j.error === 'pin') { const e = new Error('pin'); e.pin = true; throw e; }
+  if (!j.ok) throw new Error(j.error || 'The library did not answer.');
+  return j;
+}
+
+async function loadCatalog() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS.cat) || 'null');
+    if (saved && !catalog) { catalog = saved; groups = buildGroups(saved.entries); render(); }
+  } catch { /* ignore a corrupt saved copy */ }
+  const before = JSON.stringify([catalog && catalog.version, offline, needPin, loadError]);
+  try {
+    const j = await api({ action: 'catalog' });
+    catalog = { version: j.version, entries: j.entries, aliases: j.aliases || [] };
+    groups = buildGroups(catalog.entries);
+    offline = false; needPin = false; loadError = '';
+    try { localStorage.setItem(LS.cat, JSON.stringify(catalog)); } catch { /* storage full or blocked */ }
+    pruneDocCache();
+  } catch (e) {
+    if (e.pin) { needPin = true; }
+    else if (catalog) { offline = true; }
+    else { loadError = e.name === 'TypeError' ? "Can't reach the library. Check that you're on WiFi, then tap Retry." : e.message; }
+  }
+  // Don't redraw (and re-render an open diagram) when nothing changed.
+  if (JSON.stringify([catalog && catalog.version, offline, needPin, loadError]) !== before) render();
+}
+
+async function getDiagramBytes(entry) {
+  const key = `./__wl-doc/${encodeURIComponent(entry.id)}/${encodeURIComponent(entry.updated)}`;
+  let cache = null;
+  try { cache = 'caches' in window ? await caches.open(DOC_CACHE) : null; } catch { cache = null; }
+  if (cache) {
+    const hit = await cache.match(key);
+    if (hit) return new Uint8Array(await hit.arrayBuffer());
+  }
+  const j = await api({ action: 'file', id: entry.id });
+  const bin = atob(j.b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  if (cache) { try { await cache.put(key, new Response(bytes, { headers: { 'Content-Type': 'application/pdf' } })); } catch { /* quota */ } }
+  return bytes;
+}
+
+/** Drop cached diagrams that were replaced or retired. */
+async function pruneDocCache() {
+  if (!('caches' in window) || !catalog) return;
+  try {
+    const live = new Set(catalog.entries.map(e => `/__wl-doc/${encodeURIComponent(e.id)}/${encodeURIComponent(e.updated)}`));
+    const cache = await caches.open(DOC_CACHE);
+    for (const req of await cache.keys()) {
+      const path = new URL(req.url).pathname;
+      if (![...live].some(l => path.endsWith(l))) await cache.delete(req);
+    }
+  } catch { /* not critical */ }
+}
+
+/* ---------------- search ---------------- */
+function aliasText(g) {
+  return (catalog.aliases || []).filter(a => nameKey(a.name) === nameKey(g.mfr) || nameKey(a.name) === nameKey(g.type)).map(a => a.alias).join(' ');
+}
+function score(g, q) {
+  const tokens = q.trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length) return 0;
+  const words = [g.mfr, g.type, g.variant, (g.diagram || {}).keywords, (g.manual || {}).keywords, aliasText(g)].join(' ').toLowerCase();
+  const wordList = words.split(/[^a-z0-9]+/).filter(Boolean);
+  const mk = modelKey(g.model);
+  let total = 0;
+  for (const t of tokens) {
+    const tl = t.toLowerCase(), tk = modelKey(t);
+    let s = 0;
+    if (tk && mk) {
+      if (tk === mk) s = 100;
+      else if (mk.length >= 3 && tk.startsWith(mk)) s = 80 + mk.length;   // full nameplate code typed in
+      else if (tk.length >= 2 && mk.startsWith(tk)) s = 70;
+      else if (tk.length >= 3 && mk.includes(tk)) s = 50;
+    }
+    if (wordList.some(w => w === tl)) s = Math.max(s, 45);
+    else if (wordList.some(w => w.startsWith(tl))) s = Math.max(s, 35);
+    else if (tl.length >= 3 && words.includes(tl)) s = Math.max(s, 20);
+    if (!s) return 0;           // every word has to match something
+    total += s;
+  }
+  return total + (g.diagram ? 1 : 0);
+}
+
+/* ---------------- routing ---------------- */
+function route() {
+  const parts = location.hash.replace(/^#\/?/, '').split('/').filter(p => p !== '').map(p => { try { return decodeURIComponent(p); } catch { return p; } });
+  return { view: parts[0] || 'home', args: parts.slice(1) };
+}
+const link = (...p) => '#/' + p.map(encodeURIComponent).join('/');
+const devLink = g => link('d', g.mfr, g.type, g.model, ...(g.variant ? [g.variant] : []));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+/* ---------------- views ---------------- */
+function bar(title, back, withSearch) {
+  return `<div class="bar"><div class="row">
+      ${back ? `<button class="back" data-act="back" aria-label="Back">‹ Back</button>` : ''}
+      <h1>${esc(title)}</h1></div>
+      ${withSearch ? `<div class="search"><input id="q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        placeholder="Brand or model number" value="${esc(query)}" aria-label="Search">
+        <button data-act="clear" aria-label="Clear search">Clear</button></div>` : ''}
+    </div>`;
+}
+
+function render() {
+  if (needPin) return renderPin();
+  if (!catalog) {
+    app.innerHTML = bar(CFG.APP_NAME || 'Wiring Library') + `<main>${loadError
+      ? `<div class="empty"><b>Library not loaded</b>${esc(loadError)}<div class="actions"><button class="btn primary" data-act="retry">Retry</button></div></div>`
+      : '<p class="foot">Loading the library…</p>'}</main>`;
+    return;
+  }
+  const r = route();
+  if (r.view === 'm' && r.args.length === 1) return renderTypes(r.args[0]);
+  if (r.view === 'm' && r.args.length >= 2) return renderModels(r.args[0], r.args[1]);
+  if (r.view === 'd') return renderDoc(r.args);
+  renderHome();
+}
+
+const banner = () => offline ? `<div class="notice">No connection. Showing the saved list; diagrams you've opened before still work.</div>` : '';
+
+function renderHome(resultsOnly) {
+  const out = document.getElementById('results');
+  if (resultsOnly && out) { out.innerHTML = homeBody(); return; }
+  app.innerHTML = bar(CFG.APP_NAME || 'Wiring Library', false, true) + `<main>${banner()}<div id="results">${homeBody()}</div>
+    <div class="help"><button data-act="missing">Can't find your device?</button></div></main>`;
+}
+
+function homeBody() {
+  let body;
+  if (query.trim()) {
+    const hits = groups.map(g => [g, score(g, query)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 60).map(x => x[0]);
+    body = hits.length ? `<div class="list">${hits.map(deviceRow).join('')}</div>`
+      : `<div class="empty"><b>Nothing matches “${esc(query)}”</b>Try just the brand, or the first few characters of the model number.</div>`;
+  } else if (!groups.length) {
+    body = `<div class="empty"><b>The library is empty</b>Diagrams show up here as soon as they're added.</div>`;
+  } else {
+    const byMfr = new Map();
+    groups.forEach(g => byMfr.set(g.mfr, (byMfr.get(g.mfr) || 0) + 1));
+    body = `<div class="list">${[...byMfr].map(([m, n]) => `<a class="row" href="${link('m', m)}">
+      <span class="main"><span class="t1">${esc(m)}</span></span><span class="n">${n}</span><span class="chev">›</span></a>`).join('')}</div>`;
+  }
+  return body;
+}
+
+function deviceRow(g) {
+  return `<a class="row" href="${devLink(g)}"><span class="main">
+      <div><span class="sleeve">${esc(g.model)}</span>${g.diagram ? '' : '<span class="tag">Manual only</span>'}</div>
+      <div class="t2">${esc(g.mfr)} · ${esc(g.type)}${g.variant ? ' · ' + esc(g.variant) : ''}</div></span><span class="chev">›</span></a>`;
+}
+
+function renderTypes(mfr) {
+  const gs = groups.filter(g => nameKey(g.mfr) === nameKey(mfr));
+  const name = gs[0] ? gs[0].mfr : mfr;
+  const byType = new Map();
+  gs.forEach(g => byType.set(g.type, (byType.get(g.type) || 0) + 1));
+  app.innerHTML = bar(name, true) + `<main>${banner()}<h2>${esc(name)}</h2>
+    ${gs.length ? `<div class="list">${[...byType].map(([t, n]) => `<a class="row" href="${link('m', name, t)}">
+      <span class="main"><span class="t1">${esc(t)}</span></span><span class="n">${n}</span><span class="chev">›</span></a>`).join('')}</div>`
+      : `<div class="empty"><b>Nothing from ${esc(mfr)} in the library</b>It may have been renamed. Go back and search for the model number.</div>`}</main>`;
+}
+
+function renderModels(mfr, type) {
+  const gs = groups.filter(g => nameKey(g.mfr) === nameKey(mfr) && nameKey(g.type) === nameKey(type));
+  const m = gs[0] ? gs[0].mfr : mfr, t = gs[0] ? gs[0].type : type;
+  app.innerHTML = bar(t, true) + `<main>${banner()}<div class="crumbs"><a href="${link('m', m)}">${esc(m)}</a></div><h2>${esc(t)}</h2>
+    ${gs.length ? `<div class="list">${gs.map(g => `<a class="row" href="${devLink(g)}"><span class="main">
+        <div><span class="sleeve">${esc(g.model)}</span>${g.diagram ? '' : '<span class="tag">Manual only</span>'}</div>
+        ${g.variant ? `<div class="t2">${esc(g.variant)}</div>` : ''}</span><span class="chev">›</span></a>`).join('')}</div>`
+      : `<div class="empty"><b>No devices here</b>Go back and search for the model number.</div>`}</main>`;
+}
+
+let viewToken = 0;
+function renderDoc(args) {
+  const [mfr, type, model, variant = ''] = args;
+  const want = [nameKey(mfr), nameKey(type), modelKey(model), nameKey(variant)].join('|');
+  const g = groups.find(x => devKey(x) === want);
+  if (!g) {
+    app.innerHTML = bar('Not found', true) + `<main><div class="empty"><b>${esc([mfr, model, variant].filter(Boolean).join(' '))} isn't in the library</b>
+      It may have been renamed or retired. Search for the model number, or let QA/QC know it's missing.
+      <div class="actions"><a class="btn primary" href="#/">Search the library</a><button class="btn" data-act="missing">Report it missing</button></div></div></main>`;
+    return;
+  }
+  const head = `<div class="crumbs"><a href="${link('m', g.mfr)}">${esc(g.mfr)}</a> › <a href="${link('m', g.mfr, g.type)}">${esc(g.type)}</a></div>
+    <div class="doc-head"><span class="sleeve big">${esc(g.model)}</span>${g.variant ? `<div class="variant">${esc(g.variant)}</div>` : ''}
+    <div class="type">${esc(g.mfr)} ${esc(g.type)}</div></div>`;
+  const notes = [g.diagram && g.diagram.notes].filter(Boolean).map(n => `<div class="note">${esc(n)}</div>`).join('');
+  const manualBtn = g.manual ? `<a class="btn" href="${esc(g.manual.url)}" target="_blank" rel="noopener">Full manual</a>` : '';
+
+  if (!g.diagram) {
+    app.innerHTML = bar(g.model, true) + `<main>${head}<div class="empty"><b>No wiring sheet for this one yet</b>
+      The full manufacturer manual is here. Look for the "Wiring" or "Electrical installation" section, and ask a journeyman or QA/QC if it isn't clear.
+      <div class="actions">${manualBtn.replace('class="btn"', 'class="btn primary"')}<button class="btn" data-act="flag" data-label="request">Ask for a wiring sheet</button></div></div></main>`;
+    app.dataset.doc = g.manual.id;
+    return;
+  }
+
+  app.innerHTML = bar(g.model, true) + `<main>${banner()}${head}${notes}
+    <div class="actions">${manualBtn}<button class="btn" data-act="save-pdf" disabled>Save PDF</button><button class="btn fault" data-act="flag">Doesn't match my device</button></div>
+    <div class="pages" id="pages"><div class="page">Loading the diagram…</div></div>
+    <p class="foot">Updated ${esc(g.diagram.updated)}. Check the nameplate and the job drawings before you land wires.</p></main>`;
+  app.dataset.doc = g.diagram.id;
+  showPdf(g.diagram, ++viewToken);
+}
+
+let currentPdf = null;   // { bytes, name } for Save PDF
+async function showPdf(entry, token) {
+  const pagesEl = () => document.getElementById('pages');
+  try {
+    const bytes = await getDiagramBytes(entry);
+    if (token !== viewToken) return;
+    currentPdf = { bytes, name: [entry.mfr, entry.type, entry.model, entry.variant].filter(Boolean).join('__') + '.pdf' };
+    const sb = document.querySelector('[data-act="save-pdf"]'); if (sb) sb.disabled = false;
+    const pdfjs = await import('./lib/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL('./lib/pdf.worker.min.mjs', location.href).href;
+    const doc = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
+    if (token !== viewToken) return;
+    const wrap = pagesEl();
+    wrap.innerHTML = Array.from({ length: doc.numPages }, (_, i) =>
+      `${doc.numPages > 1 ? `<div class="page-num">Page ${i + 1} of ${doc.numPages}</div>` : ''}<div class="page" id="pg${i + 1}">Drawing page ${i + 1}…</div>`).join('');
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    for (let i = 1; i <= doc.numPages; i++) {
+      if (token !== viewToken) return;
+      const page = await doc.getPage(i);
+      const base = page.getViewport({ scale: 1 });
+      // Render sharper than the screen so pinch-zoom stays readable, within what phones can hold in memory.
+      const cssW = Math.min(wrap.clientWidth || 360, 1100);
+      let scale = (cssW * dpr * 1.6) / base.width;
+      scale = Math.min(scale, Math.sqrt(9e6 / (base.width * base.height)));
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      canvas.width = 0; canvas.height = 0;          // free the canvas memory right away
+      page.cleanup();
+      const slot = document.getElementById('pg' + i);
+      if (slot && blob) slot.innerHTML = `<img alt="Page ${i} of the ${esc(entry.model)} wiring diagram" src="${URL.createObjectURL(blob)}">`;
+    }
+    doc.destroy();
+  } catch (e) {
+    if (token !== viewToken) return;
+    const w = pagesEl(); if (!w) return;
+    if (e.pin) { needPin = true; render(); return; }
+    const off = !navigator.onLine || e.name === 'TypeError';
+    w.innerHTML = `<div class="empty"><b>${off ? "This diagram needs WiFi the first time" : "The diagram didn't load"}</b>${off
+      ? "It hasn't been opened on this phone before. Get on the company WiFi and try again; after that it works offline."
+      : esc(e.message)}<div class="actions"><button class="btn primary" data-act="reload-doc">Try again</button></div></div>`;
+  }
+}
+
+function renderPin() {
+  app.innerHTML = bar(CFG.APP_NAME || 'Wiring Library') + `<main><form class="pin" id="pinform"><h2>Enter the shop PIN</h2>
+    <p class="foot" style="margin:0">Ask your lead or QA/QC for it. You only enter it once on this phone.</p>
+    <input id="pin" inputmode="numeric" autocomplete="off" aria-label="Shop PIN" autofocus>
+    <button class="btn primary block" type="submit">Open the library</button>
+    ${localStorage.getItem(LS.pin) ? '<p class="foot">That PIN didn\'t work. It may have changed.</p>' : ''}</form></main>`;
+}
+
+/* ---------------- report sheet ---------------- */
+function openSheet(kind, docId) {
+  const cfg = {
+    flag: { title: "Doesn't match my device", sub: "Tell QA/QC what's different. No name is attached.", chips: ['Terminals are different', 'Different model on the nameplate', 'Hard to read', 'Wrong diagram'], ph: 'What did you see? (optional)' },
+    request: { title: 'Ask for a wiring sheet', sub: 'QA/QC will pull the wiring pages for this device.', chips: [], ph: 'Anything specific you need? (optional)' },
+    missing: { title: "Can't find your device", sub: "Type what's on the nameplate and QA/QC will add it.", chips: [], ph: 'Brand and model off the nameplate', need: true }
+  }[kind];
+  const bg = document.createElement('div');
+  bg.className = 'sheet-bg';
+  bg.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(cfg.title)}"><h3>${esc(cfg.title)}</h3><p>${esc(cfg.sub)}</p>
+    ${cfg.chips.length ? `<div class="chips">${cfg.chips.map(c => `<button class="chip" aria-pressed="false">${esc(c)}</button>`).join('')}</div>` : ''}
+    <textarea id="flagnote" placeholder="${esc(cfg.ph)}">${kind === 'missing' && query ? esc(query) : ''}</textarea>
+    <div class="actions"><button class="btn" data-x="cancel">Cancel</button><button class="btn primary" data-x="send">Send</button></div></div>`;
+  document.body.appendChild(bg);
+  bg.addEventListener('click', async e => {
+    if (e.target === bg || e.target.dataset.x === 'cancel') { bg.remove(); return; }
+    if (e.target.classList.contains('chip')) { e.target.setAttribute('aria-pressed', e.target.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); return; }
+    if (e.target.dataset.x !== 'send') return;
+    const picked = [...bg.querySelectorAll('.chip[aria-pressed="true"]')].map(c => c.textContent);
+    const text = bg.querySelector('#flagnote').value.trim();
+    if (cfg.need && !text) { bg.querySelector('#flagnote').focus(); return; }
+    const note = (kind === 'request' ? 'Wiring sheet requested. ' : '') + picked.concat(text ? [text] : []).join('. ');
+    e.target.disabled = true; e.target.textContent = 'Sending…';
+    try {
+      const r = await fetch(CFG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'flag', pin: localStorage.getItem(LS.pin) || '', id: docId || '', label: kind === 'missing' ? '(missing device)' : '', note }) });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error);
+      bg.querySelector('.sheet').innerHTML = `<h3>Sent</h3><p>Thanks. QA/QC will look at it. If you're stuck right now, ask a journeyman before you land the wires.</p>
+        <div class="actions"><button class="btn primary" data-x="cancel">Done</button></div>`;
+    } catch {
+      e.target.disabled = false; e.target.textContent = 'Send';
+      bg.querySelector('p').textContent = "Couldn't send. Check that you're on WiFi and try again.";
+    }
+  });
+}
+
+/* ---------------- events ---------------- */
+document.addEventListener('input', e => {
+  if (e.target.id === 'q') { query = e.target.value; renderHome(true); }
+});
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'pinform') return;
+  e.preventDefault();
+  localStorage.setItem(LS.pin, document.getElementById('pin').value.trim());
+  needPin = false; catalog = null; loadCatalog();
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'back') {
+    const r = route(), a = r.args;
+    if (r.view === 'd' && a.length >= 2) location.hash = link('m', a[0], a[1]);
+    else if (r.view === 'm' && a.length >= 2) location.hash = link('m', a[0]);
+    else location.hash = '#/';
+  }
+  else if (act === 'clear') { query = ''; const q = document.getElementById('q'); q.value = ''; renderHome(true); q.focus(); }
+  else if (act === 'retry') { loadError = ''; render(); loadCatalog(); }
+  else if (act === 'flag') openSheet(b.dataset.label === 'request' ? 'request' : 'flag', app.dataset.doc);
+  else if (act === 'missing') openSheet('missing', '');
+  else if (act === 'reload-doc') render();
+  else if (act === 'save-pdf' && currentPdf) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([currentPdf.bytes], { type: 'application/pdf' }));
+    a.download = currentPdf.name; document.body.appendChild(a); a.click(); a.remove();
+  }
+});
+window.addEventListener('hashchange', () => { viewToken++; window.scrollTo(0, 0); render(); });
+window.addEventListener('online', () => { if (offline) loadCatalog(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && catalog) loadCatalog(); });
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+render();
+loadCatalog();
+</script>
+</body>
+</html>
